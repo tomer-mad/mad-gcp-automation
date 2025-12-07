@@ -3,6 +3,7 @@ steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Enable APIs'
     args:
+      - '--project=${_TARGET_PROJECT_ID}'
       - services
       - enable
       - cloudfunctions.googleapis.com
@@ -13,6 +14,7 @@ steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Create Topic'
     args:
+      - '--project=${_TARGET_PROJECT_ID}'
       - pubsub
       - topics
       - create
