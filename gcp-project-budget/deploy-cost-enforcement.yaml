@@ -68,10 +68,10 @@ steps:
           --region=us-central1 \
           --format='value(serviceAccountEmail)')
         
-        echo "Granting billing permission to ${SERVICE_ACCOUNT} on billing account ${_BILLING_ACCOUNT_ID}"
-        gcloud billing accounts add-iam-policy-binding ${_BILLING_ACCOUNT_ID} \
+        echo "Granting Cloud Function's service account (${SERVICE_ACCOUNT}) the Project Billing Manager role on project ${_TARGET_PROJECT_ID}"
+        gcloud projects add-iam-policy-binding ${_TARGET_PROJECT_ID} \
           --member="serviceAccount:${SERVICE_ACCOUNT}" \
-          --role="roles/billing.user" --quiet
+          --role="roles/billing.projectManager" --quiet
 
         BUDGET_DISPLAY_NAME="${_TARGET_PROJECT_ID}-HARD-STOP-${_BUDGET_AMOUNT}"
         if gcloud beta billing budgets list --billing-account=${_BILLING_ACCOUNT_ID} --format="value(displayName)" | grep -q "^$${BUDGET_DISPLAY_NAME}$"; then
