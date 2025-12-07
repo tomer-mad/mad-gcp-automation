@@ -9,23 +9,20 @@ def stop_billing(event, context):
     This function is triggered by a Pub/Sub message from a budget alert.
     """
     print(f"Function triggered by event: {context.event_id}")
+    print(f"Full Pub/Sub message data: {event}")
 
     try:
+        # Decode the Pub/Sub message
+        pubsub_data = base64.b64decode(event['data']).decode('utf-8')
+        print(f"Decoded Pub/Sub payload: {pubsub_data}")
+        pubsub_json = json.loads(pubsub_data)
+
         # Get the project ID from environment variables
         project_id = os.environ.get('TARGET_PROJECT_ID')
         if not project_id:
             raise ValueError("TARGET_PROJECT_ID environment variable not set.")
 
         print(f"Processing budget alert for project: {project_id}")
-
-        # Decode the Pub/Sub message
-        pubsub_data = base64.b64decode(event['data']).decode('utf-8')
-        pubsub_json = json.loads(pubsub_data)
-
-        # Check if the budget alert is for the correct amount
-        budget_amount = pubsub_json.get('budgetAmount')
-        cost_amount = pubsub_json.get('costAmount')
-        print(f"Budget amount: {budget_amount}, Cost amount: {cost_amount}")
 
         # The billing API requires the project name in the format 'projects/PROJECT_ID'
         project_name = f'projects/{project_id}'
@@ -56,4 +53,3 @@ def stop_billing(event, context):
         print(f"Error: {e}")
         # Re-raise the exception to ensure the function execution is marked as failed
         raise
-

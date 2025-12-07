@@ -82,10 +82,10 @@ steps:
             --billing-account=${_BILLING_ACCOUNT_ID} \
             --display-name="$${BUDGET_DISPLAY_NAME}" \
             --budget-amount=${_BUDGET_AMOUNT} \
+            --filter-projects="projects/${_TARGET_PROJECT_ID}" \
             --credit-types-treatment=INCLUDE_ALL_CREDITS \
-            --project=${_TARGET_PROJECT_ID} \
             --all-updates-rule-pubsub-topic="projects/${_TARGET_PROJECT_ID}/topics/budget-alert-topic" \
-            --threshold-rule=percent=100.0
+            --threshold-rule=percent=90.0
         fi
 options:
   logging: CLOUD_LOGGING_ONLY
