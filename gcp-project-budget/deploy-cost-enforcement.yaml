@@ -1,7 +1,7 @@
 steps:
-  # 1. Enable Required APIs
+  # 1. Enable Required APIs on Target Project
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'Enable APIs'
+    id: 'Enable APIs on Target'
     args:
       - '--project=${_TARGET_PROJECT_ID}'
       - services
@@ -9,8 +9,18 @@ steps:
       - cloudfunctions.googleapis.com
       - pubsub.googleapis.com
       - cloudbilling.googleapis.com
+      - eventarc.googleapis.com
 
-  # 2. Create Pub/Sub Topic if it doesn't exist
+  # 2. Enable Required APIs on Build Project
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'Enable APIs on Build Project'
+    args:
+      - '--project=${PROJECT_ID}' # PROJECT_ID is a default substitution
+      - services
+      - enable
+      - billingbudgets.googleapis.com
+
+  # 3. Create Pub/Sub Topic if it doesn't exist
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Create Topic'
     entrypoint: 'bash'
@@ -24,7 +34,7 @@ steps:
           echo "Topic 'budget-alert-topic' already exists. Skipping creation."
         fi
 
-  # 3. Deploy Cloud Function (creates or updates)
+  # 4. Deploy Cloud Function (creates or updates)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Function'
     args:
@@ -46,14 +56,13 @@ steps:
       - --set-env-vars
       - 'TARGET_PROJECT_ID=${_TARGET_PROJECT_ID}'
 
-  # 4. Grant Billing Permissions and Create Budget if it doesn't exist
+  # 5. Grant Billing Permissions and Create Budget if it doesn't exist
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Setup IAM and Budget'
     entrypoint: 'bash'
     args:
       - -c
       - |
-        # This command is idempotent; it won't add a duplicate role.
         SERVICE_ACCOUNT=$(gcloud functions describe billing-disable-function \
           --project=${_TARGET_PROJECT_ID} \
           --region=us-central1 \
@@ -62,22 +71,21 @@ steps:
         echo "Granting billing permission to ${SERVICE_ACCOUNT} on billing account ${_BILLING_ACCOUNT_ID}"
         gcloud billing accounts add-iam-policy-binding ${_BILLING_ACCOUNT_ID} \
           --member="serviceAccount:${SERVICE_ACCOUNT}" \
-          --role="roles/billing.projectManager" --quiet
+          --role="roles/billing.user" --quiet
 
-        # Check if the budget already exists before creating it.
         BUDGET_DISPLAY_NAME="${_TARGET_PROJECT_ID}-HARD-STOP-${_BUDGET_AMOUNT}"
-        if gcloud beta billing budgets list --billing-account=${_BILLING_ACCOUNT_ID} --format="value(displayName)" | grep -q "^${BUDGET_DISPLAY_NAME}$"; then
-          echo "Budget '${BUDGET_DISPLAY_NAME}' already exists. Skipping creation."
+        if gcloud beta billing budgets list --billing-account=${_BILLING_ACCOUNT_ID} --format="value(displayName)" | grep -q "^$${BUDGET_DISPLAY_NAME}$"; then
+          echo "Budget '$${BUDGET_DISPLAY_NAME}' already exists. Skipping creation."
         else
-          echo "Creating budget of ${_BUDGET_AMOUNT} USD for project ${_TARGET_PROJECT_ID}"
+          echo "Creating budget of ${_BUDGET_AMOUNT} for project ${_TARGET_PROJECT_ID}"
           gcloud beta billing budgets create \
             --billing-account=${_BILLING_ACCOUNT_ID} \
-            --display-name="${BUDGET_DISPLAY_NAME}" \
+            --display-name="$${BUDGET_DISPLAY_NAME}" \
             --budget-amount=${_BUDGET_AMOUNT} \
-            --all-services \
             --credit-types-treatment=INCLUDE_ALL_CREDITS \
             --project=${_TARGET_PROJECT_ID} \
-            --threshold-rule=percent=100.0,action=pubsub,topic=projects/${_TARGET_PROJECT_ID}/topics/budget-alert-topic
+            --all-updates-rule-pubsub-topic="projects/${_TARGET_PROJECT_ID}/topics/budget-alert-topic" \
+            --threshold-rule=percent=100.0
         fi
 options:
   logging: CLOUD_LOGGING_ONLY
