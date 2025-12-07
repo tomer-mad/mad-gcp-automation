@@ -1,0 +1,2 @@
+gcloud builds submit --config gcp-project-budget/deploy-cost-enforcement.yaml  --substitutions _TARGET_PROJECT_ID="mad-mmm-poc"   --substitutions _BUDGET_AMOUNT="276"
+  --service-account="budget-deployer-sa@madgrowth-data.iam.gserviceaccount.com"   --logging=CLOUD_LOGGING_ONLY
