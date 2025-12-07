@@ -25,6 +25,6 @@ echo "Billing Account ID: ${BILLING_ACCOUNT_ID}"
 # Submit the Cloud Build job with all required parameters as substitutions.
 gcloud builds submit --config gcp-project-budget/deploy-cost-enforcement.yaml \
   --substitutions=_TARGET_PROJECT_ID="${TARGET_PROJECT_ID}",_BUDGET_AMOUNT="${BUDGET_AMOUNT}",_BILLING_ACCOUNT_ID="${BILLING_ACCOUNT_ID}" \
-  #--service-account="projects/madgrowth-data/serviceAccounts/budget-deployer-sa@madgrowth-data.iam.gserviceaccount.com"
+  --service-account="projects/madgrowth-data/serviceAccounts/budget-deployer-sa@madgrowth-data.iam.gserviceaccount.com"
 
 echo "Cloud Build job submitted successfully."
