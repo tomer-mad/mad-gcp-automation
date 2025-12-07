@@ -8,7 +8,7 @@ BUDGET_AMOUNT="276"
 
 # Retrieve the Billing Account ID associated with the target project.
 # The 'sed' command strips the 'billingAccounts/' prefix to get the raw ID.
-BILLING_ACCOUNT_ID=$(gcloud projects describe ${TARGET_PROJECT_ID} --format='value(billingAccountName)' | sed 's|billingAccounts/||g')
+BILLING_ACCOUNT_ID=$(gcloud billing projects describe ${TARGET_PROJECT_ID} --format='value(billingAccountName)' | sed 's|billingAccounts/||g')
 
 # Check if the billing account ID was retrieved successfully.
 if [[ -z "${BILLING_ACCOUNT_ID}" ]]; then
