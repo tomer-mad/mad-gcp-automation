@@ -1,31 +1,57 @@
 #!/bin/bash
 
+# --- Configuration ---
 # The target project for which the budget will be enforced.
 TARGET_PROJECT_ID="mad-mmm-poc"
 
 # The budget amount, in the currency of your billing account.
-# CHANGE THIS VALUE to your desired budget amount.
 BUDGET_AMOUNT="56"
 
-# The service account that will run the Cloud Build job.
-BUILD_SERVICE_ACCOUNT="budget-deployer-sa@madgrowth-data.iam.gserviceaccount.com"
+# The project where the Cloud Build job runs and where the deployer service account lives.
+BUILD_PROJECT_ID="madgrowth-data"
+BUILD_SERVICE_ACCOUNT_NAME="budget-deployer-sa"
+BUILD_SERVICE_ACCOUNT_EMAIL="${BUILD_SERVICE_ACCOUNT_NAME}@${BUILD_PROJECT_ID}.iam.gserviceaccount.com"
+# --- End of Configuration ---
+
+
+# --- Service Account Creation (Idempotent) ---
+echo "Checking for build service account ${BUILD_SERVICE_ACCOUNT_EMAIL}..."
+# The 'gcloud iam service-accounts describe' command fails if the SA doesn't exist.
+# We suppress output and check the exit code.
+if ! gcloud iam service-accounts describe ${BUILD_SERVICE_ACCOUNT_EMAIL} --project=${BUILD_PROJECT_ID} &> /dev/null; then
+  echo "Service account not found. Creating it now..."
+  gcloud iam service-accounts create ${BUILD_SERVICE_ACCOUNT_NAME} \
+    --project=${BUILD_PROJECT_ID} \
+    --display-name="Budget Deployer Service Account"
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to create the build service account."
+    echo "Please ensure you have permissions to create service accounts in project ${BUILD_PROJECT_ID}."
+    exit 1
+  fi
+  echo "Service account created successfully."
+else
+  echo "Service account already exists."
+fi
+# --- End of Service Account Creation ---
+
 
 # --- Pre-flight Permission Grant ---
-echo "Granting the build service account (${BUILD_SERVICE_ACCOUNT}) permission to manage IAM on ${TARGET_PROJECT_ID}..."
-# This command allows the build process to grant the required billing role to the Cloud Function's service account.
-# It is run by the user executing this script, who is expected to have the necessary privileges.
+echo "Granting the build service account (${BUILD_SERVICE_ACCOUNT_EMAIL}) permission to manage IAM on ${TARGET_PROJECT_ID}..."
+# This allows the build process to grant the required billing role to the Cloud Function's service account.
 gcloud projects add-iam-policy-binding ${TARGET_PROJECT_ID} \
-  --member="serviceAccount:${BUILD_SERVICE_ACCOUNT}" \
+  --member="serviceAccount:${BUILD_SERVICE_ACCOUNT_EMAIL}" \
   --role="roles/resourcemanager.projectIamAdmin"
 
 if [ $? -ne 0 ]; then
   echo "Error: Failed to grant Project IAM Admin role to the build service account."
-  echo "Please ensure you have permissions to manage IAM policies on project ${TARGET_PROJECT_ID} and try again."
+  echo "Please ensure you have permissions to manage IAM policies on project ${TARGET_PROJECT_ID}."
   exit 1
 fi
 echo "Required IAM permissions for the build process have been successfully granted."
 # --- End of Pre-flight Grant ---
 
+
+# --- Main Logic ---
 # Retrieve the Billing Account ID associated with the target project.
 BILLING_ACCOUNT_ID=$(gcloud billing projects describe ${TARGET_PROJECT_ID} --format='value(billingAccountName)' | sed 's|billingAccounts/||g')
 
@@ -39,11 +65,9 @@ echo "Target Project ID: ${TARGET_PROJECT_ID}"
 echo "Budget Amount: ${BUDGET_AMOUNT} (in billing account currency)"
 echo "Billing Account ID: ${BILLING_ACCOUNT_ID}"
 
-# Submit the Cloud Build job. The service account for the build now has the necessary
-# permissions to complete all steps in the YAML file.
+# Submit the Cloud Build job.
 gcloud builds submit --config gcp-project-budget/deploy-cost-enforcement.yaml \
-#  --logging=CLOUD_LOGGING_ONLY \
   --substitutions=_TARGET_PROJECT_ID="${TARGET_PROJECT_ID}",_BUDGET_AMOUNT="${BUDGET_AMOUNT}",_BILLING_ACCOUNT_ID="${BILLING_ACCOUNT_ID}" \
-  --service-account="${BUILD_SERVICE_ACCOUNT}"
+  --service-account="projects/${BUILD_PROJECT_ID}/serviceAccounts/${BUILD_SERVICE_ACCOUNT_EMAIL}"
 
 echo "Cloud Build job submitted successfully."
