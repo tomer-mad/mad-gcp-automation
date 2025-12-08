@@ -8,7 +8,7 @@ def stop_billing(event, context):
     """
     Stops billing for a project by disabling the billing account associated with it.
     This function is triggered by a Pub/Sub message from a budget alert and only
-    disables billing if the budget has reached 99% of its limit.
+    disables billing if the cost has reached 99% or more of the budget.
     """
     print(f"Function triggered by event: {context.event_id}")
 
@@ -18,13 +18,19 @@ def stop_billing(event, context):
         pubsub_json = json.loads(pubsub_data)
         print(f"Decoded Pub/Sub payload: {pubsub_json}")
 
-        # Extract the threshold percentage from the message
-        threshold_percent = pubsub_json.get('threshold_percent', 0.0)
-        print(f"Budget threshold crossed: {threshold_percent * 100}%")
+        cost_amount = pubsub_json.get('costAmount', 0.0)
+        budget_amount = pubsub_json.get('budgetAmount', 0.0)
 
-        # --- Main Logic: Only act on the 99% threshold ---
-        if threshold_percent < 0.99:
-            print(f"Budget is at {threshold_percent * 100}%. Taking no action. Billing will be disabled at 99%.")
+        # --- Main Logic: Calculate percentage and act only if >= 99% ---
+        if budget_amount == 0:
+            print("Budget amount is zero. Cannot calculate percentage. Taking no action.")
+            return "No action taken, budget is zero."
+
+        current_percentage = cost_amount / budget_amount
+        print(f"Current cost is {cost_amount} out of {budget_amount} budget ({current_percentage:.2%}).")
+
+        if current_percentage < 0.99:
+            print(f"Budget usage is below 99%. Taking no action.")
             return "No action taken."
 
         # Get the project ID from environment variables
@@ -32,7 +38,7 @@ def stop_billing(event, context):
         if not project_id:
             raise ValueError("TARGET_PROJECT_ID environment variable not set.")
 
-        print(f"CRITICAL: Budget threshold is >= 99%. Proceeding to disable billing for project: {project_id}")
+        print(f"CRITICAL: Budget usage is >= 99%. Proceeding to disable billing for project: {project_id}")
 
         project_name = f'projects/{project_id}'
         billing = discovery.build('cloudbilling', 'v1', cache_discovery=False)
