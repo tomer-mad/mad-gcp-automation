@@ -5,7 +5,7 @@ TARGET_PROJECT_ID="mad-mmm-poc"
 
 # The budget amount, in the currency of your billing account.
 # CHANGE THIS VALUE to your desired budget amount.
-BUDGET_AMOUNT="1000"
+BUDGET_AMOUNT="56"
 
 # The service account that will run the Cloud Build job.
 BUILD_SERVICE_ACCOUNT="budget-deployer-sa@madgrowth-data.iam.gserviceaccount.com"
@@ -42,7 +42,7 @@ echo "Billing Account ID: ${BILLING_ACCOUNT_ID}"
 # Submit the Cloud Build job. The service account for the build now has the necessary
 # permissions to complete all steps in the YAML file.
 gcloud builds submit --config gcp-project-budget/deploy-cost-enforcement.yaml \
-  --logging=CLOUD_LOGGING_ONLY \
+#  --logging=CLOUD_LOGGING_ONLY \
   --substitutions=_TARGET_PROJECT_ID="${TARGET_PROJECT_ID}",_BUDGET_AMOUNT="${BUDGET_AMOUNT}",_BILLING_ACCOUNT_ID="${BILLING_ACCOUNT_ID}" \
   --service-account="${BUILD_SERVICE_ACCOUNT}"
 
