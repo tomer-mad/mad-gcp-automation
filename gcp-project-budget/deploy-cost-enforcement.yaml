@@ -55,24 +55,16 @@ steps:
       - 'budget-alert-topic'
       - --set-env-vars
       - 'TARGET_PROJECT_ID=${_TARGET_PROJECT_ID}'
+      - --service-account
+      - '${_FUNCTION_SERVICE_ACCOUNT_EMAIL}'
 
-  # 5. Grant Billing Permissions and Create Budget if it doesn't exist
+  # 5. Create Budget if it doesn't exist
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'Setup IAM and Budget'
+    id: 'Create Budget'
     entrypoint: 'bash'
     args:
       - -c
       - |
-        SERVICE_ACCOUNT=$(gcloud functions describe billing-disable-function \
-          --project=${_TARGET_PROJECT_ID} \
-          --region=us-central1 \
-          --format='value(serviceAccountEmail)')
-        
-        echo "Granting Cloud Function's service account (${SERVICE_ACCOUNT}) the Project Billing Manager role on project ${_TARGET_PROJECT_ID}"
-        gcloud projects add-iam-policy-binding ${_TARGET_PROJECT_ID} \
-          --member="serviceAccount:${SERVICE_ACCOUNT}" \
-          --role="roles/billing.projectManager" --quiet
-
         BUDGET_DISPLAY_NAME="${_TARGET_PROJECT_ID}-HARD-STOP-${_BUDGET_AMOUNT}"
         if gcloud beta billing budgets list --billing-account=${_BILLING_ACCOUNT_ID} --format="value(displayName)" | grep -q "^$${BUDGET_DISPLAY_NAME}$"; then
           echo "Budget '$${BUDGET_DISPLAY_NAME}' already exists. Skipping creation."
