@@ -5,7 +5,7 @@ TARGET_PROJECT_ID="mad-mmm-poc"
 
 # The budget amount, in the currency of your billing account.
 # CHANGE THIS VALUE to your desired budget amount in ILS.
-BUDGET_AMOUNT="276"
+BUDGET_AMOUNT="123"
 
 # Retrieve the Billing Account ID associated with the target project.
 # The 'sed' command strips the 'billingAccounts/' prefix to get the raw ID.
