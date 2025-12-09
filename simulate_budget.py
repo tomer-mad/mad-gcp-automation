@@ -31,14 +31,22 @@ def send_budget_alert(project_id, topic_id, current_spend, budget_cap):
     data_str = json.dumps(alert_payload)
     data_bytes = data_str.encode("utf-8")
 
+    # Add attributes for filtering on the subscriber side
+    attributes = {
+        "source": "budget-simulation",
+        "project_id": project_id,
+    }
+
     print(f"📡 Attempting to publish to: {topic_path}...")
     print(f"   Payload: {data_str}")
+    print(f"   Attributes: {attributes}")
 
     # 4. Publish
     try:
-        publish_future = publisher.publish(topic_path, data=data_bytes)
+        publish_future = publisher.publish(topic_path, data=data_bytes, **attributes)
         message_id = publish_future.result()
         print(f"✅ Sent Alert: Spent ${current_spend} / ${budget_cap} (Msg ID: {message_id})")
+        print(f"   Published to topic: {topic_path}")
 
     except PermissionDenied:
         print("\n❌ ERROR: Permission Denied.")
@@ -64,14 +72,14 @@ if __name__ == "__main__":
         "--spend",
         required=False,
         type=float,
-        default= 30.0 ,
+        default= 300.0 ,
         help="The current cost amount to simulate."
     )
     parser.add_argument(
         "--budget",
         required=False,
         type=float,
-        default=20.0,
+        default=200.0,
         help="The total budget amount."
     )
     parser.add_argument(

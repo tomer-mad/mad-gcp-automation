@@ -173,6 +173,8 @@ deploy() {
       gcloud iam service-accounts create "${FUNCTION_SERVICE_ACCOUNT_NAME}" \
         --project="${TARGET_PROJECT_ID}" \
         --display-name="Billing Disabler Function Service Account"
+      echo "Waiting 30 seconds for service account to propagate before granting permissions..."
+      sleep 30
     fi
     echo "Granting Project Billing Manager role to function SA..."
     gcloud projects add-iam-policy-binding "${TARGET_PROJECT_ID}" \
