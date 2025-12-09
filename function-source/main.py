@@ -12,6 +12,7 @@ def stop_billing(event, context):
     disables billing if the cost has reached 99% or more of the budget.
     """
     print(f"Function triggered by event: {context.event_id}")
+    identity = "unknown"
     # --- DIAGNOSTIC START ---
     try:
         metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email"
@@ -66,6 +67,12 @@ def stop_billing(event, context):
         return "Billing disabled."
 
     except HttpError as e:
+        if e.resp.status == 403:
+            project_id = os.environ.get('TARGET_PROJECT_ID', 'unknown')
+            print(f"PERMISSION_ERROR: The service account '{identity}' lacks the necessary permissions. "
+                  f"Please grant the 'Billing Account Administrator' or 'Project Billing Manager' role "
+                  f"to this service account for the project '{project_id}' "
+                  f"or the associated billing account.")
         print(f"ERROR: Google API HTTP Error: {e}")
         print(f"Detailed API Error Response: {e.content}")
         raise

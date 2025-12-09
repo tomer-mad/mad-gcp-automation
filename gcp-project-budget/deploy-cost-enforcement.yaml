@@ -1,26 +1,5 @@
 steps:
-  # 1. Enable Required APIs on Target Project
-  - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'Enable APIs on Target'
-    args:
-      - '--project=${_TARGET_PROJECT_ID}'
-      - services
-      - enable
-      - cloudfunctions.googleapis.com
-      - pubsub.googleapis.com
-      - cloudbilling.googleapis.com
-      - eventarc.googleapis.com
-
-  # 2. Enable Required APIs on Build Project
-  - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'Enable APIs on Build Project'
-    args:
-      - '--project=${PROJECT_ID}' # PROJECT_ID is a default substitution
-      - services
-      - enable
-      - billingbudgets.googleapis.com
-
-  # 3. Create Pub/Sub Topic if it doesn't exist
+  # 1. Create Pub/Sub Topic if it doesn't exist
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Create Topic'
     entrypoint: 'bash'
@@ -34,7 +13,7 @@ steps:
           echo "Topic 'budget-alert-topic' already exists. Skipping creation."
         fi
 
-  # 4. Deploy Cloud Function (creates or updates)
+  # 2. Deploy Cloud Function (creates or updates)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Function'
     args:
@@ -58,7 +37,7 @@ steps:
       - --service-account
       - '${_FUNCTION_SERVICE_ACCOUNT_EMAIL}'
 
-  # 5. Create Budget if it doesn't exist
+  # 3. Create Budget if it doesn't exist
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Create Budget'
     entrypoint: 'bash'
