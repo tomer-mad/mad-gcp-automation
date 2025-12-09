@@ -1,78 +1,92 @@
 import json
-import time
+import argparse
+from datetime import datetime, timezone, timedelta
 from google.cloud import pubsub_v1
-from google.api_core.exceptions import PermissionDenied  # Added for specific auth error handling
+from google.api_core.exceptions import PermissionDenied
 
-# =================CONFIGURATION=================
-PROJECT_ID = "mad-mmm-poc"
-TOPIC_ID = "budget-alert-topic"
-
-
-# ===============================================
-
-def send_budget_alert(current_spend, budget_cap):
+def send_budget_alert(project_id, topic_id, current_spend, budget_cap):
     """
-    Imitates a Google Cloud Billing alert by publishing
-    a formatted JSON message to Pub/Sub.
+    Simulates a Google Cloud Billing alert by publishing a formatted JSON message to Pub/Sub.
     """
+    # 1. Construct the dynamic payload
+    # This matches the schema Google Billing sends
+    one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
+    timestamp_str = one_minute_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    # Calculate threshold (just for the mock data)
-    ratio = current_spend / budget_cap
-
-    # 1. Construct the Payload
-    # This matches the exact schema Google Billing sends
     alert_payload = {
-        "budgetDisplayName": "simulation-budget",
-        "alertThresholdExceeded": round(ratio, 2),
+        "budgetDisplayName": f"{project_id}-HARD-STOP-{int(budget_cap)}",
+        "alertThresholdExceeded": round(current_spend / budget_cap, 2),
         "costAmount": float(current_spend),
-        "costIntervalStart": "2023-10-01T00:00:00Z",
+        "costIntervalStart": timestamp_str,
         "budgetAmount": float(budget_cap),
         "budgetAmountType": "SPECIFIED_AMOUNT",
-        "currencyCode": "ILS"  # Israel Shekels
+        "currencyCode": "ILS"  # Using a standard currency, can be changed if needed
     }
 
     # 2. Prepare the Publisher
-    # This automatically picks up credentials from 'gcloud auth application-default login'
     publisher = pubsub_v1.PublisherClient()
-    topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
+    topic_path = publisher.topic_path(project_id, topic_id)
 
     # 3. Serialize and Encode
-    # We send bytes; Pub/Sub handles the Base64 wrapper automatically
     data_str = json.dumps(alert_payload)
     data_bytes = data_str.encode("utf-8")
 
     print(f"📡 Attempting to publish to: {topic_path}...")
+    print(f"   Payload: {data_str}")
 
     # 4. Publish
     try:
         publish_future = publisher.publish(topic_path, data=data_bytes)
-
-        # Block until the message is actually published
         message_id = publish_future.result()
-        print(f"✅ Sent Alert: Spent ₪{current_spend} / ₪{budget_cap} (Msg ID: {message_id})")
+        print(f"✅ Sent Alert: Spent ${current_spend} / ${budget_cap} (Msg ID: {message_id})")
 
     except PermissionDenied:
         print("\n❌ ERROR: Permission Denied.")
         print("💡 FIX: You need to authenticate your local machine first.")
         print("   Run this command in your terminal:")
         print("   gcloud auth application-default login")
-
     except Exception as e:
         print(f"❌ Failed to send: {e}")
 
 
 if __name__ == "__main__":
-    print("--- 💰 Starting Budget Simulation (ILS) ---")
+    parser = argparse.ArgumentParser(
+        description="Simulate a Google Cloud Billing budget alert.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "--project",
+        required=False,
+        default="mad-bi",
+        help="The Google Cloud project ID where the Pub/Sub topic exists."
+    )
+    parser.add_argument(
+        "--spend",
+        required=False,
+        type=float,
+        default= 30.0 ,
+        help="The current cost amount to simulate."
+    )
+    parser.add_argument(
+        "--budget",
+        required=False,
+        type=float,
+        default=20.0,
+        help="The total budget amount."
+    )
+    parser.add_argument(
+        "--topic",
+        default="budget-alert-topic" ,
+        help="The ID of the Pub/Sub topic to publish to (default: budget-alert-topic)."
+    )
 
-    # # SCENARIO 1: Everything is fine (50% spent)
-    # send_budget_alert(current_spend=500.00, budget_cap=1000.00)
-    # time.sleep(1)
-    #
-    # # SCENARIO 2: Warning Threshold (85% spent)
-    # send_budget_alert(current_spend=850.00, budget_cap=1000.00)
-    # time.sleep(1)
+    args = parser.parse_args()
 
-    # SCENARIO 3: Over Budget (120% spent)
-    send_budget_alert(current_spend=1200.00, budget_cap=1000.00)
-
+    print(f"--- 💰 Starting Budget Simulation for project '{args.project}' ---")
+    send_budget_alert(
+        project_id=args.project,
+        topic_id=args.topic,
+        current_spend=args.spend,
+        budget_cap=args.budget
+    )
     print("--- Simulation Complete ---")
