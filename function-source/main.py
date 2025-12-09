@@ -3,6 +3,7 @@ import json
 import os
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
+import requests
 
 def stop_billing(event, context):
     """
@@ -11,7 +12,15 @@ def stop_billing(event, context):
     disables billing if the cost has reached 99% or more of the budget.
     """
     print(f"Function triggered by event: {context.event_id}")
-
+    # --- DIAGNOSTIC START ---
+    try:
+        metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email"
+        headers = {"Metadata-Flavor": "Google"}
+        identity = requests.get(metadata_url, headers=headers).text
+        print(f"🕵️ ACTUAL FUNCTION IDENTITY: {identity}")
+    except Exception as e:
+        print(f"Could not determine identity: {e}")
+    # --- DIAGNOSTIC END ---
     try:
         # Decode the Pub/Sub message
         pubsub_data = base64.b64decode(event['data']).decode('utf-8')

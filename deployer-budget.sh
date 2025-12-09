@@ -5,7 +5,7 @@
 TARGET_PROJECT_ID="mad-mmm-poc"
 
 # The budget amount, in the currency of your billing account.
-BUDGET_AMOUNT="27"
+BUDGET_AMOUNT="20"
 
 # The project where the Cloud Build job runs and where the deployer service account lives.
 BUILD_PROJECT_ID="madgrowth-data"
