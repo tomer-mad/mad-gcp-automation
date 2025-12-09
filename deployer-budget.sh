@@ -231,11 +231,21 @@ deploy() {
     gcloud functions deploy billing-disable-function \
       --project "${TARGET_PROJECT_ID}" \
       --region "us-central1" \
+      --gen2 \
       --runtime "python311" \
       --entry-point "stop_billing" \
       --source "./function-source" \
+      --service-account "${FUNCTION_SERVICE_ACCOUNT_EMAIL}" \
       --trigger-topic "${TOPIC_ID}" \
-      --service-account "${FUNCTION_SERVICE_ACCOUNT_EMAIL}"
+      --min-instances=1 \
+      --max-instances=2
+
+    # 6a. Explicitly set min-instances on the underlying Cloud Run service
+    echo "Applying scaling settings to the underlying Cloud Run service..."
+    gcloud run services update billing-disable-function \
+      --project="${TARGET_PROJECT_ID}" \
+      --region="us-central1" \
+      --min-instances=1
 
     # 7. Create Budget
     echo "Ensuring billing budget exists..."
