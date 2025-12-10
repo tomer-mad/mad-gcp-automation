@@ -93,7 +93,7 @@ undeploy() {
     # Find and Delete Budget
     BILLING_ACCOUNT_ID=$(gcloud billing projects describe "${TARGET_PROJECT_ID}" --format='value(billingAccountName)' | sed 's|billingAccounts/||g' 2>/dev/null)
     if [[ -n "${BILLING_ACCOUNT_ID}" ]]; then
-        BUDGET_DISPLAY_NAME="${TARGET_PROJECT_ID}-HARD-STOP-${BUDGET_AMOUNT}"
+        BUDGET_DISPLAY_NAME="${TARGET_PROJECT_ID}-HARD-STOP-AUTOMATION-BUDGET"
         BUDGET_ID=$(gcloud beta billing budgets list --billing-account="${BILLING_ACCOUNT_ID}" --filter="displayName=${BUDGET_DISPLAY_NAME}" --format='value(name)')
         if [[ -n "${BUDGET_ID}" ]]; then
             echo "Deleting budget '${BUDGET_DISPLAY_NAME}'..."
@@ -256,7 +256,9 @@ deploy() {
     fi
 
     BUDGET_DISPLAY_NAME="${TARGET_PROJECT_ID}-HARD-STOP-AUTOMATION-BUDGET"
-    if ! gcloud beta billing budgets list --billing-account=${BILLING_ACCOUNT_ID} --format="value(displayName)" | grep -q "^${BUDGET_DISPLAY_NAME}$"; then
+    BUDGET_ID=$(gcloud beta billing budgets list --billing-account="${BILLING_ACCOUNT_ID}" --filter="displayName=${BUDGET_DISPLAY_NAME}" --format='value(name)')
+
+    if [[ -z "${BUDGET_ID}" ]]; then
       echo "Creating budget of ${BUDGET_AMOUNT} for project ${TARGET_PROJECT_ID}..."
       gcloud beta billing budgets create \
         --billing-account=${BILLING_ACCOUNT_ID} \
