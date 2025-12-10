@@ -267,6 +267,7 @@ deploy() {
         --filter-projects="projects/${TARGET_PROJECT_ID}" \
         --credit-types-treatment=INCLUDE_ALL_CREDITS \
         --all-updates-rule-pubsub-topic="projects/${TARGET_PROJECT_ID}/topics/${TOPIC_ID}" \
+        --enable-project-level-recipients \
         --threshold-rule=percent=0.9 \
         --threshold-rule=percent=0.95 \
         --threshold-rule=percent=0.99
