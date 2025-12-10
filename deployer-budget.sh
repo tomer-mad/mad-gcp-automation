@@ -255,7 +255,7 @@ deploy() {
       exit 1
     fi
 
-    BUDGET_DISPLAY_NAME="${TARGET_PROJECT_ID}-HARD-STOP-${BUDGET_AMOUNT}"
+    BUDGET_DISPLAY_NAME="${TARGET_PROJECT_ID}-HARD-STOP-AUTOMATION-BUDGET"
     if ! gcloud beta billing budgets list --billing-account=${BILLING_ACCOUNT_ID} --format="value(displayName)" | grep -q "^${BUDGET_DISPLAY_NAME}$"; then
       echo "Creating budget of ${BUDGET_AMOUNT} for project ${TARGET_PROJECT_ID}..."
       gcloud beta billing budgets create \
@@ -265,6 +265,7 @@ deploy() {
         --filter-projects="projects/${TARGET_PROJECT_ID}" \
         --credit-types-treatment=INCLUDE_ALL_CREDITS \
         --all-updates-rule-pubsub-topic="projects/${TARGET_PROJECT_ID}/topics/${TOPIC_ID}" \
+        --enable-project-level-recipients \
         --threshold-rule=percent=0.9 \
         --threshold-rule=percent=0.95 \
         --threshold-rule=percent=0.99
