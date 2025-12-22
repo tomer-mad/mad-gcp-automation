@@ -10,8 +10,12 @@ from google.cloud.exceptions import NotFound
 def run_gcloud_command(command):
     """Runs a gcloud command, raising an error if it fails."""
     print(f"[INFO]    Executing: {' '.join(command)}")
-    process = subprocess.run(command, capture_output=True, text=True, check=True)
-    return process.stdout
+    try:
+        process = subprocess.run(command, capture_output=True, text=True, check=True)
+        return process.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR]   gcloud command failed: {e.stderr}", file=sys.stderr)
+        raise
 
 def poll_for_replica(client, dataset_id, desired_location, timeout_seconds=300):
     """Polls the dataset until the specified replica is found or timeout occurs."""
@@ -28,7 +32,7 @@ def poll_for_replica(client, dataset_id, desired_location, timeout_seconds=300):
         except Exception as e:
             print(f"[WARN]    Polling failed with error: {e}. Retrying...")
         
-        time.sleep(10) # Wait 10 seconds between checks
+        time.sleep(10)
         print("[INFO]    ...still waiting...")
 
     print(f"[ERROR]   Timeout: Replica '{desired_location}' did not become active within {timeout_seconds} seconds.", file=sys.stderr)
@@ -96,15 +100,16 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
                 print("[RESULT]  No action needed.")
                 continue
 
-            print(f"[ACTION]  Creating replica in '{desired_location}'...")
+            print(f"[ACTION]  Creating replica in '{desired_location}' using 'gcloud alpha'...")
             
             # --- THE DEFINITIVE FIX ---
-            # 1. Get the raw properties dictionary
-            dataset_properties = existing_dataset._properties
-            # 2. Modify the dictionary
-            dataset_properties.setdefault("replicas", []).append({"location": desired_location})
-            # 3. Call update_dataset with the modified object and a field mask
-            client.update_dataset(existing_dataset, ["replicas"])
+            # Use the explicit 'gcloud alpha' command designed for this operation.
+            command = [
+                "gcloud", "alpha", "bq", "datasets", "update",
+                "--add-replica", desired_location,
+                dataset_id
+            ]
+            run_gcloud_command(command)
             
             print("[RESULT]  Replica creation initiated.")
             
