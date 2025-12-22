@@ -7,36 +7,15 @@ import subprocess
 from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 
-def run_gcloud_command(command):
-    """Runs a gcloud command, raising an error if it fails."""
+def run_command(command, check=True):
+    """Runs a command, raising an error if it fails."""
     print(f"[INFO]    Executing: {' '.join(command)}")
     try:
-        process = subprocess.run(command, capture_output=True, text=True, check=True)
-        return process.stdout
+        process = subprocess.run(command, capture_output=True, text=True, check=check)
+        return process
     except subprocess.CalledProcessError as e:
-        print(f"[ERROR]   gcloud command failed: {e.stderr}", file=sys.stderr)
+        print(f"[ERROR]   Command failed: {e.stderr}", file=sys.stderr)
         raise
-
-def poll_for_replica(client, dataset_id, desired_location, timeout_seconds=300):
-    """Polls the dataset until the specified replica is found or timeout occurs."""
-    print(f"[INFO]    Polling for replica '{desired_location}' to become active...")
-    start_time = time.time()
-    while time.time() - start_time < timeout_seconds:
-        try:
-            dataset = client.get_dataset(dataset_id)
-            raw_resource = dataset._properties
-            replicas = raw_resource.get("replicas", [])
-            if any(r["location"] == desired_location for r in replicas):
-                print("[INFO]    Replica is now active.")
-                return True
-        except Exception as e:
-            print(f"[WARN]    Polling failed with error: {e}. Retrying...")
-        
-        time.sleep(10)
-        print("[INFO]    ...still waiting...")
-
-    print(f"[ERROR]   Timeout: Replica '{desired_location}' did not become active within {timeout_seconds} seconds.", file=sys.stderr)
-    return False
 
 def provision_datasets(client, project_id, config_path="config.yaml"):
     """Provisions and replicates BigQuery datasets."""
@@ -100,16 +79,17 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
                 print("[RESULT]  No action needed.")
                 continue
 
-            print(f"[ACTION]  Creating replica in '{desired_location}' using 'gcloud alpha'...")
+            print(f"[ACTION]  Creating replica in '{desired_location}' using 'bq update'...")
             
             # --- THE DEFINITIVE FIX ---
-            # Use the explicit 'gcloud alpha' command designed for this operation.
+            # Use the correct 'bq update' command with the right flags and arguments.
             command = [
-                "gcloud", "alpha", "bq", "datasets", "update",
-                "--add-replica", desired_location,
+                "bq", "update",
+                "--dataset",
+                "--add_replica", desired_location,
                 dataset_id
             ]
-            run_gcloud_command(command)
+            run_command(command)
             
             print("[RESULT]  Replica creation initiated.")
             
@@ -118,7 +98,13 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             if promote_replica:
                 print(f"[ACTION]  Promoting '{desired_location}' to primary...")
-                run_gcloud_command(["bq", "update", f"--promote_replica={desired_location}", dataset_id])
+                promo_command = [
+                    "bq", "update",
+                    "--dataset",
+                    "--promote_replica", desired_location,
+                    dataset_id
+                ]
+                run_command(promo_command)
                 print("[RESULT]  Promotion complete.")
 
         except NotFound:
@@ -136,6 +122,27 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
     print("\n" + "="*64)
     print("  All datasets processed. Provisioning complete.")
     print("="*64)
+
+def poll_for_replica(client, dataset_id, desired_location, timeout_seconds=300):
+    """Polls the dataset until the specified replica is found or timeout occurs."""
+    print(f"[INFO]    Polling for replica '{desired_location}' to become active...")
+    start_time = time.time()
+    while time.time() - start_time < timeout_seconds:
+        try:
+            dataset = client.get_dataset(dataset_id)
+            raw_resource = dataset._properties
+            replicas = raw_resource.get("replicas", [])
+            if any(r["location"] == desired_location for r in replicas):
+                print("[INFO]    Replica is now active.")
+                return True
+        except Exception as e:
+            print(f"[WARN]    Polling failed with error: {e}. Retrying...")
+        
+        time.sleep(10)
+        print("[INFO]    ...still waiting...")
+
+    print(f"[ERROR]   Timeout: Replica '{desired_location}' did not become active within {timeout_seconds} seconds.", file=sys.stderr)
+    return False
 
 def main():
     parser = argparse.ArgumentParser(description="Provision BigQuery Datasets with Replication.")

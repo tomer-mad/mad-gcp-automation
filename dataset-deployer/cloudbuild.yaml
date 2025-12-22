@@ -2,17 +2,8 @@
 # This file defines the build steps for Google Cloud Build.
 
 steps:
-  # Step 1: Install gcloud alpha components.
-  # This is required for the advanced dataset replication commands.
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'components'
-      - 'install'
-      - 'alpha'
-      - '--quiet'
-
-  # Step 2: Install Python dependencies
+  # Step 1: Install Python dependencies
+  # The 'bq' and 'gcloud' tools are available by default in the Cloud Build environment.
   - name: 'python:3.12-slim'
     entrypoint: 'pip'
     args:
@@ -21,7 +12,7 @@ steps:
       - 'requirements.txt'
       - '--user'
 
-  # Step 3: Run the provisioning script
+  # Step 2: Run the provisioning script
   # The --confirm flag is added to bypass the interactive prompt.
   - name: 'python:3.12-slim'
     entrypoint: 'python3'
