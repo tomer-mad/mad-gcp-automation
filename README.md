@@ -16,7 +16,7 @@ The solution is built around a serverless architecture using GCP's native servic
 
 5.  **Service Account:** A dedicated Identity and Access Management (IAM) service account (`billing-disabler-sa`) is created with the minimum necessary permissions (`roles/billing.projectManager`) to disable billing. The Cloud Function executes under this service account to ensure a secure and auditable process.
 
-This entire infrastructure is deployed and managed by a single shell script, `deployer-budget.sh`, which handles resource creation, IAM permissions, and cleanup.
+This entire infrastructure is deployed and managed by a single shell script, `budget-deployer.sh`, which handles resource creation, IAM permissions, and cleanup.
 
 ## Features
 
@@ -36,12 +36,12 @@ This entire infrastructure is deployed and managed by a single shell script, `de
 
 ### Deployment
 
-The `deployer-budget.sh` script is the primary tool for managing the solution.
+The `budget-deployer.sh` script is the primary tool for managing the solution.
 
 **To deploy the budget enforcement system:**
 
 ```bash
-./deployer-budget.sh deploy --project <YOUR_PROJECT_ID> --amount <BUDGET_AMOUNT>
+./budget-deployer.sh deploy --project <YOUR_PROJECT_ID> --amount <BUDGET_AMOUNT>
 ```
 
 *   `<YOUR_PROJECT_ID>`: The ID of the GCP project you want to protect.
@@ -60,7 +60,7 @@ This command will:
 **To remove the budget enforcement system:**
 
 ```bash
-./deployer-budget.sh undeploy --project <YOUR_PROJECT_ID> --amount <BUDGET_AMOUNT>
+./budget-deployer.sh undeploy --project <YOUR_PROJECT_ID> --amount <BUDGET_AMOUNT>
 ```
 
 This command will safely delete all the resources created during deployment, including the Cloud Function, Pub/Sub topic, budget, and service account.
@@ -72,7 +72,7 @@ This command will safely delete all the resources created during deployment, inc
 **To update or redeploy the system:**
 
 ```bash
-./deployer-budget.sh redeploy --project <YOUR_PROJECT_ID> --amount <BUDGET_AMOUNT>
+./budget-deployer.sh redeploy --project <YOUR_PROJECT_ID> --amount <BUDGET_AMOUNT>
 ```
 
 This command is a convenient shortcut that first runs the `undeploy` process and then immediately runs the `deploy` process.
