@@ -3,31 +3,15 @@ import sys
 import time
 import argparse
 import yaml
-import json
 import subprocess
 from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 
 def run_gcloud_command(command):
-    """Runs a gcloud command and returns its output, raising an error if it fails."""
+    """Runs a gcloud command, raising an error if it fails."""
     print(f"[INFO]    Executing: {' '.join(command)}")
-    process = subprocess.run(command, capture_output=True, text=True)
-    if process.returncode != 0:
-        print(f"[ERROR]   gcloud command failed: {process.stderr}", file=sys.stderr)
-        raise RuntimeError(f"gcloud command failed: {process.stderr}")
+    process = subprocess.run(command, capture_output=True, text=True, check=True)
     return process.stdout
-
-def get_dataset_details(project_id, dataset_name):
-    """Gets detailed dataset info, including replicas, using the bq CLI."""
-    command = [
-        "bq", "show", "--format=json",
-        f"{project_id}:{dataset_name}"
-    ]
-    try:
-        output = run_gcloud_command(command)
-        return json.loads(output)
-    except RuntimeError:
-        return None # If the dataset doesn't exist, bq fails.
 
 def provision_datasets(client, project_id, config_path="config.yaml"):
     """Provisions and replicates BigQuery datasets."""
@@ -62,50 +46,66 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
         print(f"Processing Dataset {i+1}/{len(datasets_to_process)}: {dataset_name}")
         print("-"*64)
 
-        details = get_dataset_details(project_id, dataset_name)
+        try:
+            existing_dataset = client.get_dataset(dataset_id)
+            actual_location = existing_dataset.location
+            print(f"[STATUS]  Dataset '{dataset_id}' already exists in location '{actual_location}'.")
 
-        if not details:
+            if actual_location == desired_location:
+                print("[RESULT]  Location matches. No action needed.")
+                continue
+
+            print(f"[INFO]    Location mismatch detected. Desired: '{desired_location}'.")
+
+            if not replication_enabled:
+                message = f"[ACTION]  Replication is disabled. Following '{mismatch_policy}' policy."
+                if mismatch_policy == 'fail':
+                    print(message, file=sys.stderr); sys.exit(1)
+                else:
+                    print(message + " (warn). Skipping.")
+                continue
+
+            print("[ACTION]  Replication is ENABLED. Checking for existing replicas.")
+            
+            # The 'replicas' property is not on the high-level object, but in the raw resource properties
+            raw_resource = existing_dataset._properties
+            replicas = raw_resource.get("replicas", [])
+            
+            if any(r["location"] == desired_location for r in replicas):
+                print(f"[INFO]    A replica in '{desired_location}' already exists.")
+                print("[RESULT]  No action needed.")
+                continue
+
+            print(f"[ACTION]  Creating replica in '{desired_location}'...")
+            
+            # Correctly add the new replica to the list
+            new_replica = {"location": desired_location}
+            replicas.append(new_replica)
+            existing_dataset.replicas = replicas # Set the property on the object
+            
+            # Use a field mask to tell the API *only* to update the 'replicas' field
+            client.update_dataset(existing_dataset, ["replicas"])
+            
+            print("[RESULT]  Replica creation initiated.")
+
+            if promote_replica:
+                print("[ACTION]  Promotion requested. Waiting 60s for replication to stabilize...")
+                time.sleep(60)
+                print(f"[ACTION]  Promoting '{desired_location}' to primary...")
+                run_gcloud_command(["bq", "update", f"--promote_replica={desired_location}", dataset_id])
+                print("[RESULT]  Promotion complete.")
+
+        except NotFound:
             print(f"[STATUS]  Dataset '{dataset_id}' not found.")
             print(f"[ACTION]  Creating new primary dataset in '{desired_location}'...")
-            client.create_dataset(bigquery.Dataset(dataset_id), timeout=30)
+            new_dataset = bigquery.Dataset(dataset_id)
+            new_dataset.location = desired_location
+            client.create_dataset(new_dataset, timeout=30)
             print(f"[RESULT]  Dataset '{dataset_id}' created successfully.")
-            continue
+        except Exception as e:
+            print(f"[ERROR]   An unexpected error occurred: {e}", file=sys.stderr)
+            print("[RESULT]  Skipping dataset due to error.", file=sys.stderr)
 
-        actual_location = details.get("location")
-        print(f"[STATUS]  Dataset '{dataset_id}' already exists in location '{actual_location}'.")
-
-        if actual_location == desired_location:
-            print("[RESULT]  Location matches. No action needed.")
-            continue
-
-        print(f"[INFO]    Location mismatch detected. Desired: '{desired_location}'.")
-
-        if not replication_enabled:
-            message = f"[ACTION]  Replication is disabled. Following '{mismatch_policy}' policy."
-            if mismatch_policy == 'fail':
-                print(message, file=sys.stderr); sys.exit(1)
-            else:
-                print(message + " (warn). Skipping.")
-            continue
-
-        print("[ACTION]  Replication is ENABLED. Checking for existing replicas.")
-        
-        replicas = details.get("replicas", [])
-        if any(r["location"] == desired_location for r in replicas):
-            print(f"[INFO]    A replica in '{desired_location}' already exists.")
-            print("[RESULT]  No action needed.")
-            continue
-
-        print(f"[ACTION]  Creating replica in '{desired_location}'...")
-        run_gcloud_command(["bq", "update", f"--add_replica={desired_location}", dataset_id])
-        print("[RESULT]  Replica creation initiated.")
-
-        if promote_replica:
-            print("[ACTION]  Promotion requested. Waiting 60s for replication to stabilize...")
-            time.sleep(60)
-            print(f"[ACTION]  Promoting '{desired_location}' to primary...")
-            run_gcloud_command(["bq", "update", f"--promote_replica={desired_location}", dataset_id])
-            print("[RESULT]  Promotion complete.")
 
     print("\n" + "="*64)
     print("  All datasets processed. Provisioning complete.")
