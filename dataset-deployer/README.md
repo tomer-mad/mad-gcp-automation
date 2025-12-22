@@ -1,31 +1,52 @@
 # GCP Dataset Provisioner
 
-This automation script provisions and manages Google Cloud BigQuery datasets, including advanced cross-region replication. It is designed to be run securely via a deployment script that triggers Google Cloud Build.
+This automation script provisions and manages Google Cloud BigQuery datasets. It is designed to be run securely via a deployment script that triggers Google Cloud Build.
 
 ## How It Works
 
-The script reads a `config.yaml` file to determine the desired state of datasets. It uses a combination of the Python client library for basic operations and the `gcloud` command-line tool for advanced replication tasks.
+The script reads a `config.yaml` file to determine the desired state of datasets. It uses the pure Python client library for all operations.
 
-1.  **Creates if Not Found:** If a dataset does not exist, it is created as a new primary dataset.
-2.  **Checks if Found:** If a dataset exists, its location is checked against the config.
-3.  **Handles Replication:** If locations mismatch and `replication.enabled` is `true`, the script uses `gcloud alpha bq datasets update` to create a read-only replica in the new target location.
+1.  **Creates if Not Found:** If a dataset does not exist, it is created as a new primary (writable) dataset in the location specified in the config.
+
+2.  **Checks if Found:** If a dataset already exists, its location is checked.
+    *   **If Locations Match:** No action is taken.
+    *   **If Locations Mismatch:** The script's behavior depends on the `replication` policy.
+
+3.  **Handles Replication (Asynchronous):**
+    *   If `replication.enabled` is `false`, the script follows the `on_location_mismatch` policy (`warn` or `fail`).
+    *   If `replication.enabled` is `true`, the script sends an **asynchronous request** to the BigQuery API to create a read-only replica in the new target location. The script will then continue immediately without waiting for the replica to be created. This process may take several minutes to complete in the GCP console.
 
 ## How to Use
 
 ### Prerequisites
 
-1.  **Google Cloud SDK:** The `gcloud` and `bq` command-line tools must be installed and authenticated.
-2.  **Alpha Components:** The `gcloud alpha` components must be installed. Run this command once:
-    ```bash
-    gcloud components install alpha
-    ```
-3.  **Permissions (One-Time Setup per Project):**
+1.  **Google Cloud SDK:** Required for authenticating and submitting builds.
+2.  **Permissions (One-Time Setup per Project):**
     *   **Your User:** You need the **"Cloud Build Editor"** (`roles/cloudbuild.builds.editor`) role to submit builds.
-    *   **Cloud Build Service Account:** The project's Cloud Build service account must have the **"BigQuery Admin"** (`roles/bigquery.admin`) role.
+    *   **Cloud Build Service Account:** The project's Cloud Build service account must have the **"BigQuery Admin"** (`roles/bigquery.admin`) role to manage replication.
 
 ### Configuration
 
 Edit the `config.yaml` file to define your desired datasets and policies.
+
+**Example `config.yaml`:**
+```yaml
+# config.yaml
+
+# The desired primary location for your datasets.
+location: "US"
+
+# --- Cross-Region Replication Policy ---
+replication:
+  # Set to true to enable the replication feature.
+  enabled: false # Disabled by default for safety.
+
+# A list of standard base names for the datasets to be created.
+base_names:
+  - "MAD_L0"
+  - "MAD_L2"
+  - "MAD_ETL"
+```
 
 ### Deployment (Recommended Method)
 
