@@ -1,16 +1,21 @@
 # GCP Dataset Provisioner
 
-This automation script provisions Google Cloud BigQuery datasets based on a powerful and flexible configuration file. It is designed to be run securely via a deployment script that triggers Google Cloud Build.
+This automation script provisions and manages Google Cloud BigQuery datasets, including advanced cross-region replication. It is designed to be run securely via a deployment script that triggers Google Cloud Build.
 
 ## How It Works
 
-The script reads a `config.yaml` file that defines dataset requirements. It automatically generates the full list of datasets to create by combining **base names** and **environment suffixes** (e.g., `sales` + `dev` -> `SALES_DEV`).
+The script reads a `config.yaml` file to determine the desired state of datasets.
 
-The process is idempotent and includes an important safety check:
+1.  **Creates if Not Found:** If a dataset does not exist, it is created as a new primary (writable) dataset in the location specified in the config.
 
-1.  **Creates if Not Found:** If a dataset does not exist, it is created in the specified location.
-2.  **Checks if Found:** If a dataset already exists, the script checks if its location in GCP matches the location specified in the configuration.
-3.  **Handles Mismatches:** If the locations do not match, the script follows the `on_location_mismatch` policy defined in the config (`warn` or `fail`). This prevents accidental misconfigurations, as a dataset's location is immutable.
+2.  **Checks if Found:** If a dataset already exists, its location is checked.
+    *   **If Locations Match:** No action is taken.
+    *   **If Locations Mismatch:** The script's behavior depends on the `replication` policy.
+
+3.  **Handles Replication:**
+    *   If `replication.enabled` is `false`, the script follows the `on_location_mismatch` policy (`warn` or `fail`).
+    *   If `replication.enabled` is `true`, the script will create a read-only replica of the existing dataset in the new target location.
+    *   If `replication.promote_replica_to_primary` is `true`, the script will then promote the new replica to be the new writable primary, demoting the old one.
 
 ## How to Use
 
@@ -18,8 +23,8 @@ The process is idempotent and includes an important safety check:
 
 1.  **Google Cloud SDK:** Authenticate with `gcloud auth login` and `gcloud auth application-default login`.
 2.  **Permissions (One-Time Setup per Project):**
-    *   **Your User:** You need the **"Cloud Build Editor"** (`roles/cloudbuild.builds.editor`) role in the target project to submit builds.
-    *   **Cloud Build Service Account:** The project's Cloud Build service account (e.g., `[PROJECT_NUMBER]@cloudbuild.gserviceaccount.com`) must have the **"BigQuery Data Editor"** (`roles/bigquery.dataEditor`) role.
+    *   **Your User:** You need the **"Cloud Build Editor"** (`roles/cloudbuild.builds.editor`) role to submit builds.
+    *   **Cloud Build Service Account:** The project's Cloud Build service account must have the **"BigQuery Admin"** (`roles/bigquery.admin`) role. *(Note: This is a higher permission level required for replication and promotion.)*
 
 ### Configuration
 
@@ -29,27 +34,29 @@ Edit the `config.yaml` file to define your desired datasets and policies.
 ```yaml
 # config.yaml
 
-# Default location for all datasets.
+# The desired primary location for your datasets.
 location: "US"
 
-# Policy for handling location mismatches.
-# 'warn': Print a warning and continue (Default).
-# 'fail': Print an error and stop the deployment.
-on_location_mismatch: "warn"
+# --- Cross-Region Replication Policy ---
+replication:
+  # Set to true to enable the replication feature.
+  enabled: true # Set to true to activate this feature.
 
-# A list of environment suffixes to append to each base name.
-environments:
-  - "dev"
-  - "prod"
+  # If true, the script will promote the new replica to be the new primary.
+  promote_replica_to_primary: false
 
-# A list of base names for the datasets to be created.
+# A list of standard base names for the datasets to be created.
 base_names:
-  - "mad_l1"
-  - "marketing"
+  - "MAD_L0"
+  - "MAD_L2"
+  - "MAD_ETL"
 ```
-This configuration will create `MAD_L1_DEV`, `MAD_L1_PROD`, `MARKETING_DEV`, and `MARKETING_PROD`. If `MARKETING_PROD` already exists in the `EU`, the script will print a warning and skip it.
+**Scenario:** Imagine `MAD_L0_PROD` already exists in `EU`. With the config above, running the script against the `US` location will:
+1.  Detect the location mismatch for `MAD_L0_PROD`.
+2.  Create a read-only replica of `MAD_L0_PROD` in the `US`.
+3.  If `promote_replica_to_primary` were `true`, it would then make the `US` dataset the new writable primary.
 
-### Deployment (Recommended Method)
+### Deployment
 
 The `dataset-deployer.sh` script is the safest way to run this automation.
 
@@ -62,13 +69,4 @@ chmod +x dataset-deployer.sh
 ```bash
 ./dataset-deployer.sh <your-gcp-project-id>
 ```
-The script will show you the project you are targeting and ask for a final 'y' before submitting the job to Cloud Build.
-
-### Manual Testing (for Development)
-
-You can also run the Python script locally for quick tests.
-
-1.  **Install dependencies:** `pip install -r requirements.txt`
-2.  **Set your project:** `gcloud config set project <your-gcp-project-id>`
-3.  **Dry Run:** `python3 provision_datasets.py` (shows the target project and exits)
-4.  **Execute:** `python3 provision_datasets.py --confirm`
+The script will ask for confirmation before submitting the job to Cloud Build.
