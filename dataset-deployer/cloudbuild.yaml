@@ -1,0 +1,25 @@
+# cloudbuild.yaml
+# This file defines the build steps for Google Cloud Build.
+# It installs Python dependencies and runs the dataset provisioning script.
+
+steps:
+  # Step 1: Install Python dependencies
+  # We use the official Python image and specify pip as the entrypoint.
+  - name: 'python:3.12-slim'
+    entrypoint: 'pip'
+    args:
+      - 'install'
+      - '-r'
+      - 'requirements.txt'
+      - '--user'
+
+  # Step 2: Run the provisioning script
+  # The --confirm flag is added to bypass the interactive prompt in the automated environment.
+  - name: 'python:3.12-slim'
+    entrypoint: 'python3'
+    args:
+      - 'provision_datasets.py'
+      - '--confirm'
+
+# By default, Cloud Build uses the project's Cloud Build service account.
+# Ensure this service account has the "BigQuery Data Editor" (roles/bigquery.dataEditor) role.
