@@ -13,7 +13,7 @@ replication:
   # Set to true to enable the replication feature.
   # If a dataset exists in a different region, a replica will be created in the 'location' defined above.
   # This is an asynchronous "fire-and-forget" operation.
-  enabled: false # Disabled by default for safety.
+  enabled: true # Disabled by default for safety.
 
 # A list of environment suffixes to append to each base name.
 environments:
