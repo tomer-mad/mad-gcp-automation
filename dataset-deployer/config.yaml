@@ -4,19 +4,20 @@
 location: "US"
 
 # Policy for handling location mismatches when replication is disabled.
-# 'warn': Print a warning and continue (Default).
-# 'fail': Print an error and stop the deployment.
 on_location_mismatch: "warn"
 
-# --- NEW: Cross-Region Replication Policy ---
+# --- Cross-Region Replication Policy ---
 replication:
   # Set to true to enable the replication feature.
-  # If a dataset exists in a different region, a replica will be created in the 'location' defined above.
   enabled: true # Disabled by default for safety.
 
-  # If true, the script will promote the replica to be the new primary (writable) dataset.
-  # This causes the old primary to become a read-only replica.
+  # If true, the script will promote the new replica to be the new primary.
   promote_replica_to_primary: false
+
+# A list of environment suffixes to append to each base name.
+environments:
+  - "dev"
+  - "prod"
 
 # A list of standard base names for the datasets to be created.
 base_names:
