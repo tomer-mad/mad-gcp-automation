@@ -3,7 +3,9 @@ import sys
 import time
 import argparse
 import yaml
+import json
 import subprocess
+import tempfile
 from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 
@@ -51,8 +53,22 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
         print("-"*64)
 
         try:
-            existing_dataset = client.get_dataset(dataset_id)
-            actual_location = existing_dataset.location
+            # Use bq show to get the full, raw definition
+            show_command = ["bq", "show", "--format=json", dataset_id]
+            process = run_command(show_command, check=False)
+            
+            if process.returncode != 0:
+                # Dataset does not exist
+                print(f"[STATUS]  Dataset '{dataset_id}' not found.")
+                print(f"[ACTION]  Creating new primary dataset in '{desired_location}'...")
+                new_dataset = bigquery.Dataset(dataset_id)
+                new_dataset.location = desired_location
+                client.create_dataset(new_dataset, timeout=30)
+                print(f"[RESULT]  Dataset '{dataset_id}' created successfully.")
+                continue
+
+            dataset_details = json.loads(process.stdout)
+            actual_location = dataset_details.get("location")
             print(f"[STATUS]  Dataset '{dataset_id}' already exists in location '{actual_location}'.")
 
             if actual_location == desired_location:
@@ -71,25 +87,27 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             print("[ACTION]  Replication is ENABLED. Checking for existing replicas.")
             
-            raw_resource = existing_dataset._properties
-            replicas = raw_resource.get("replicas", [])
-            
+            replicas = dataset_details.get("replicas", [])
             if any(r["location"] == desired_location for r in replicas):
                 print(f"[INFO]    A replica in '{desired_location}' already exists.")
                 print("[RESULT]  No action needed.")
                 continue
 
-            print(f"[ACTION]  Creating replica in '{desired_location}' using 'bq update'...")
+            print(f"[ACTION]  Creating replica in '{desired_location}' using 'bq update --source'...")
             
             # --- THE DEFINITIVE FIX ---
-            # Use the correct 'bq update' command with the right flags and arguments.
-            command = [
-                "bq", "update",
-                "--dataset",
-                "--add_replica", desired_location,
-                dataset_id
-            ]
-            run_command(command)
+            # 1. Modify the JSON definition
+            dataset_details.setdefault("replicas", []).append({"location": desired_location})
+            
+            # 2. Write the modified JSON to a temporary file
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as tmp:
+                json.dump(dataset_details, tmp)
+                tmp_path = tmp.name
+            
+            # 3. Update the dataset from the temporary file
+            update_command = ["bq", "update", "--source", tmp_path, dataset_id]
+            run_command(update_command)
+            os.remove(tmp_path) # Clean up the temporary file
             
             print("[RESULT]  Replica creation initiated.")
             
@@ -98,22 +116,10 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             if promote_replica:
                 print(f"[ACTION]  Promoting '{desired_location}' to primary...")
-                promo_command = [
-                    "bq", "update",
-                    "--dataset",
-                    "--promote_replica", desired_location,
-                    dataset_id
-                ]
+                promo_command = ["bq", "update", "--dataset", "--promote_replica", desired_location, dataset_id]
                 run_command(promo_command)
                 print("[RESULT]  Promotion complete.")
 
-        except NotFound:
-            print(f"[STATUS]  Dataset '{dataset_id}' not found.")
-            print(f"[ACTION]  Creating new primary dataset in '{desired_location}'...")
-            new_dataset = bigquery.Dataset(dataset_id)
-            new_dataset.location = desired_location
-            client.create_dataset(new_dataset, timeout=30)
-            print(f"[RESULT]  Dataset '{dataset_id}' created successfully.")
         except Exception as e:
             print(f"[ERROR]   An unexpected error occurred: {e}", file=sys.stderr)
             print("[RESULT]  Skipping dataset due to error.", file=sys.stderr)
@@ -145,6 +151,7 @@ def poll_for_replica(client, dataset_id, desired_location, timeout_seconds=300):
     return False
 
 def main():
+    # Main function remains the same
     parser = argparse.ArgumentParser(description="Provision BigQuery Datasets with Replication.")
     parser.add_argument("--confirm", action="store_true", help="Flag to confirm execution.")
     args = parser.parse_args()
