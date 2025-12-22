@@ -1,7 +1,7 @@
 # config.yaml
 
 # Default location for all datasets created by this script.
-location: "EU"
+location: "us-central1"
 
 # Policy for handling location mismatches when replication is disabled.
 # 'warn': Print a warning and continue (Default).
@@ -13,7 +13,7 @@ replication:
   # Set to true to enable the replication feature.
   # If a dataset exists in a different region, a replica will be created in the 'location' defined above.
   # This is an asynchronous "fire-and-forget" operation.
-  enabled: true # Disabled by default for safety.
+  enabled: false # Disabled by default for safety.
 
 # A list of environment suffixes to append to each base name.
 environments:
