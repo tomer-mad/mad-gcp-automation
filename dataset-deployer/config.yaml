@@ -2,25 +2,23 @@
 # The GCP project is determined automatically from the execution environment.
 
 # Default location for all datasets created by this script.
-# You can override this on a per-dataset basis if needed.
 location: "US"
 
-# A list of environment suffixes to append to each base name.
-# For each base_name, a dataset will be created for each environment.
-# e.g., 'sales' + 'dev' -> 'sales_dev'
-environments:
-  - "DEV"
-  - "PROD"
+# Policy for handling location mismatches.
+# 'warn': Print a warning and continue (Default).
+# 'fail': Print an error and stop the deployment.
+on_location_mismatch: "warn"
 
-# A list of base names for the datasets to be created.
+# A list of environment suffixes to append to each base name.
+environments:
+  - "dev"
+  - "prod"
+
+# A list of standard base names for the datasets to be created.
+# This provides a consistent structure for all projects.
 base_names:
   - "MAD_L0"
-  - "MAD_L1"
-  - "MAD_L1"
-
-# Optional: You can also define datasets with specific locations if you
-# need to override the default location.
-# specific_datasets:
-#   - name: "data_science"
-#     location: "EU"
-#     environments: ["dev"] # You can even override environments
+  - "MAD_L2"
+  - "MAD_ETL"
+  - "MAD_DWH"
+  - "MAD_INTERMEDIATE"

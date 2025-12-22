@@ -15,6 +15,7 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
         config = yaml.safe_load(f)
 
     default_location = config.get("location", "US")
+    mismatch_policy = config.get("on_location_mismatch", "warn").lower()
     environments = config.get("environments", [])
     base_names = config.get("base_names", [])
 
@@ -42,21 +43,39 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
         else:
             datasets_to_create.append({"name": name.upper(), "location": loc})
 
-    # Create the datasets
+    # --- Main Provisioning Loop ---
     for dataset_config in datasets_to_create:
         dataset_name = dataset_config.get("name")
-        location = dataset_config.get("location")
+        desired_location = dataset_config.get("location")
         dataset_id = f"{project_id}.{dataset_name}"
 
         try:
-            client.get_dataset(dataset_id)
-            print(f"Dataset '{dataset_id}' already exists. Skipping.")
+            existing_dataset = client.get_dataset(dataset_id)
+            print(f"Dataset '{dataset_id}' already exists.")
+
+            # --- Location Mismatch Check ---
+            if existing_dataset.location != desired_location:
+                message = (
+                    f"  - WARNING: Location mismatch for '{dataset_id}'.\n"
+                    f"    - Configured location: '{desired_location}'\n"
+                    f"    - Actual location:     '{existing_dataset.location}'"
+                )
+                if mismatch_policy == 'fail':
+                    print(message, file=sys.stderr)
+                    print("  - Halting deployment due to 'fail' policy.", file=sys.stderr)
+                    sys.exit(1)
+                else: # 'warn' policy
+                    print(message)
+                    print("  - Skipping dataset due to location mismatch.")
+            else:
+                print(f"  - Location matches ('{existing_dataset.location}'). No action needed.")
+
         except NotFound:
-            print(f"Dataset '{dataset_id}' not found. Creating in '{location}'...")
+            print(f"Dataset '{dataset_id}' not found. Creating in '{desired_location}'...")
             dataset = bigquery.Dataset(dataset_id)
-            dataset.location = location
+            dataset.location = desired_location
             client.create_dataset(dataset, timeout=30)
-            print(f"Dataset '{dataset_id}' created successfully.")
+            print(f"  - Dataset '{dataset_id}' created successfully.")
 
 def main():
     """
