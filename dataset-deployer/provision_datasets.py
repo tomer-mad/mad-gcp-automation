@@ -13,6 +13,27 @@ def run_gcloud_command(command):
     process = subprocess.run(command, capture_output=True, text=True, check=True)
     return process.stdout
 
+def poll_for_replica(client, dataset_id, desired_location, timeout_seconds=300):
+    """Polls the dataset until the specified replica is found or timeout occurs."""
+    print(f"[INFO]    Polling for replica '{desired_location}' to become active...")
+    start_time = time.time()
+    while time.time() - start_time < timeout_seconds:
+        try:
+            dataset = client.get_dataset(dataset_id)
+            raw_resource = dataset._properties
+            replicas = raw_resource.get("replicas", [])
+            if any(r["location"] == desired_location for r in replicas):
+                print("[INFO]    Replica is now active.")
+                return True
+        except Exception as e:
+            print(f"[WARN]    Polling failed with error: {e}. Retrying...")
+        
+        time.sleep(10) # Wait 10 seconds between checks
+        print("[INFO]    ...still waiting...")
+
+    print(f"[ERROR]   Timeout: Replica '{desired_location}' did not become active within {timeout_seconds} seconds.", file=sys.stderr)
+    return False
+
 def provision_datasets(client, project_id, config_path="config.yaml"):
     """Provisions and replicates BigQuery datasets."""
     print("================================================================")
@@ -77,19 +98,16 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             print(f"[ACTION]  Creating replica in '{desired_location}'...")
             
-            # --- THE FIX ---
-            # Directly modify the internal properties dictionary
             new_replica = {"location": desired_location}
             raw_resource.setdefault("replicas", []).append(new_replica)
-            
-            # Use a field mask to tell the API *only* to update the 'replicas' field
             client.update_dataset(existing_dataset, ["replicas"])
             
             print("[RESULT]  Replica creation initiated.")
+            
+            if not poll_for_replica(client, dataset_id, desired_location):
+                raise RuntimeError("Failed to confirm replica creation.")
 
             if promote_replica:
-                print("[ACTION]  Promotion requested. Waiting 60s for replication to stabilize...")
-                time.sleep(60)
                 print(f"[ACTION]  Promoting '{desired_location}' to primary...")
                 run_gcloud_command(["bq", "update", f"--promote_replica={desired_location}", dataset_id])
                 print("[RESULT]  Promotion complete.")
