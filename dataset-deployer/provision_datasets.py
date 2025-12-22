@@ -67,7 +67,6 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             print("[ACTION]  Replication is ENABLED. Checking for existing replicas.")
             
-            # The 'replicas' property is not on the high-level object, but in the raw resource properties
             raw_resource = existing_dataset._properties
             replicas = raw_resource.get("replicas", [])
             
@@ -78,10 +77,10 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             print(f"[ACTION]  Creating replica in '{desired_location}'...")
             
-            # Correctly add the new replica to the list
+            # --- THE FIX ---
+            # Directly modify the internal properties dictionary
             new_replica = {"location": desired_location}
-            replicas.append(new_replica)
-            existing_dataset.replicas = replicas # Set the property on the object
+            raw_resource.setdefault("replicas", []).append(new_replica)
             
             # Use a field mask to tell the API *only* to update the 'replicas' field
             client.update_dataset(existing_dataset, ["replicas"])
