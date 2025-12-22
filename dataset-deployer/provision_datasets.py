@@ -98,10 +98,13 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
 
             print(f"[ACTION]  Creating replica in '{desired_location}'...")
             
-            # --- THE FIX ---
-            # Use patch_dataset, which is designed for partial updates.
-            patch_body = {"replicas": [{"location": desired_location}]}
-            client.patch_dataset(dataset_id, patch_body)
+            # --- THE DEFINITIVE FIX ---
+            # 1. Get the raw properties dictionary
+            dataset_properties = existing_dataset._properties
+            # 2. Modify the dictionary
+            dataset_properties.setdefault("replicas", []).append({"location": desired_location})
+            # 3. Call update_dataset with the modified object and a field mask
+            client.update_dataset(existing_dataset, ["replicas"])
             
             print("[RESULT]  Replica creation initiated.")
             
