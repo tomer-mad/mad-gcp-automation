@@ -10,12 +10,14 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
     """
     Provisions and replicates BigQuery datasets based on a YAML configuration file.
     """
-    print(f"Starting dataset provisioning for project: '{project_id}'")
+    print("================================================================")
+    print(f"  Starting Dataset Provisioner for project: '{project_id}'")
+    print("================================================================")
 
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
-    # Load configuration with defaults
+    # --- Load configuration ---
     default_location = config.get("location", "US")
     replication_config = config.get("replication", {})
     replication_enabled = replication_config.get("enabled", False)
@@ -31,72 +33,78 @@ def provision_datasets(client, project_id, config_path="config.yaml"):
             dataset_name = f"{base_name.upper()}_{env.upper()}"
             datasets_to_process.append({"name": dataset_name, "location": default_location})
 
-    for specific_dataset in config.get("specific_datasets", []):
-        # This part remains for one-off creations, but replication logic focuses on the main list
-        pass
+    print(f"\nFound {len(datasets_to_process)} datasets to process from config:")
+    for d in datasets_to_process:
+        print(f"- {d['name']} (Desired Location: {d['location']})")
 
     # --- Main Provisioning Loop ---
-    for dataset_config in datasets_to_process:
+    for i, dataset_config in enumerate(datasets_to_process):
         dataset_name = dataset_config.get("name")
         desired_location = dataset_config.get("location")
         dataset_id = f"{project_id}.{dataset_name}"
 
+        print("\n----------------------------------------------------------------")
+        print(f"Processing Dataset {i+1}/{len(datasets_to_process)}: {dataset_name}")
+        print("----------------------------------------------------------------")
+
         try:
             existing_dataset = client.get_dataset(dataset_id)
-            print(f"Dataset '{dataset_id}' already exists.")
+            print(f"[STATUS]  Dataset '{dataset_id}' already exists in location '{existing_dataset.location}'.")
 
             if existing_dataset.location == desired_location:
-                print(f"  - Location matches ('{existing_dataset.location}'). No action needed.")
+                print("[RESULT]  Location matches. No action needed.")
                 continue
 
             # --- LOCATION MISMATCH ---
-            print(f"  - Location mismatch detected. Config: '{desired_location}', Actual: '{existing_dataset.location}'.")
+            print(f"[INFO]    Location mismatch detected. Desired: '{desired_location}'.")
 
             if not replication_enabled:
-                message = "  - Replication is disabled. Following 'on_location_mismatch' policy."
+                message = f"[ACTION]  Replication is disabled. Following '{mismatch_policy}' policy."
                 if mismatch_policy == 'fail':
                     print(message, file=sys.stderr)
+                    print("[RESULT]  Halting deployment.", file=sys.stderr)
                     sys.exit(1)
                 else:
-                    print(message + " (warn). Skipping.")
+                    print(message)
+                    print("[RESULT]  Skipping dataset.")
                 continue
 
             # --- REPLICATION LOGIC ---
-            print("  - Replication is ENABLED. Proceeding with replication logic.")
+            print("[ACTION]  Replication is ENABLED. Checking for existing replicas.")
             
-            # Check if the desired location is already a replica
             if existing_dataset.replicas:
                 for replica in existing_dataset.replicas:
                     if client.get_dataset(replica).location == desired_location:
-                        print(f"  - A replica in '{desired_location}' already exists. No action needed.")
-                        # Optional: Add promotion logic here if needed in the future
+                        print(f"[INFO]    A replica in '{desired_location}' already exists.")
+                        print("[RESULT]  No action needed.")
                         continue
 
-            print(f"  - Creating replica in '{desired_location}'...")
-            existing_dataset.replicas = [bigquery.DatasetReference.from_string(f"{project_id}.{dataset_name}", default_project=project_id)]
-            
-            # The API needs a special format for the replica
+            print(f"[ACTION]  Creating replica in '{desired_location}'...")
+            existing_dataset.replicas = [bigquery.DatasetReference.from_string(dataset_id, default_project=project_id)]
             replica_update = {"replica": {"location": desired_location}}
-            
-            # This is an API quirk; we patch the dataset to add the replica
             client.patch_dataset(existing_dataset.dataset_id, replica_update)
-            print("  - Replica creation initiated. This can take some time.")
+            print("[RESULT]  Replica creation initiated. This can take some time.")
 
             if promote_replica:
-                print("  - Promotion requested. Waiting before promoting...")
-                # It's crucial to wait for replication to be established before promoting
-                time.sleep(60) # Wait 60 seconds as a precaution
+                print("[ACTION]  Promotion requested. Waiting 60s for replication to stabilize...")
+                time.sleep(60)
                 
-                print(f"  - Promoting '{desired_location}' to primary...")
+                print(f"[ACTION]  Promoting '{desired_location}' to primary...")
                 client.update_dataset(existing_dataset, ["primary_dataset_id"])
-                print("  - Promotion complete.")
+                print("[RESULT]  Promotion complete.")
 
         except NotFound:
-            print(f"Dataset '{dataset_id}' not found. Creating primary in '{desired_location}'...")
+            print(f"[STATUS]  Dataset '{dataset_id}' not found.")
+            print(f"[ACTION]  Creating new primary dataset in '{desired_location}'...")
             dataset = bigquery.Dataset(dataset_id)
             dataset.location = desired_location
             client.create_dataset(dataset, timeout=30)
-            print(f"  - Dataset '{dataset_id}' created successfully.")
+            print(f"[RESULT]  Dataset '{dataset_id}' created successfully.")
+
+    print("\n================================================================")
+    print("  All datasets processed. Provisioning complete.")
+    print("================================================================")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Provision BigQuery Datasets with Replication.")
