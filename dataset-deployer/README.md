@@ -21,7 +21,7 @@ The script reads a `config.yaml` file to determine the desired state of datasets
 
 ### Prerequisites
 
-1.  **Google Cloud SDK:** Authenticate with `gcloud auth login` and `gcloud auth application-default login`.
+1.  **Google Cloud SDK:** The `gcloud` and `bq` command-line tools must be installed and authenticated. This is pre-installed in Cloud Build and Cloud Shell.
 2.  **Permissions (One-Time Setup per Project):**
     *   **Your User:** You need the **"Cloud Build Editor"** (`roles/cloudbuild.builds.editor`) role to submit builds.
     *   **Cloud Build Service Account:** The project's Cloud Build service account must have the **"BigQuery Admin"** (`roles/bigquery.admin`) role. *(Note: This is a higher permission level required for replication and promotion.)*
@@ -40,7 +40,7 @@ location: "US"
 # --- Cross-Region Replication Policy ---
 replication:
   # Set to true to enable the replication feature.
-  enabled: true # Set to true to activate this feature.
+  enabled: true
 
   # If true, the script will promote the new replica to be the new primary.
   promote_replica_to_primary: false
